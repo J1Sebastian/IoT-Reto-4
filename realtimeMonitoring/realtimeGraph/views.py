@@ -673,3 +673,31 @@ Filtro para formatear datos en los templates
 @ register.filter
 def add_str(str1, str2):
     return str1 + str2
+
+
+def get_data_summary(request):
+    start_date = request.GET.get('start', '1970-01-01')
+    end_date = request.GET.get('end', '2100-01-01')
+    data_summary = []
+
+    locations = Location.objects.all()
+    measurements = Measurement.objects.filter(active=True)
+
+    for location in locations:
+        stations = Station.objects.filter(location=location)
+        for measurement in measurements:
+            location_data = Data.objects.filter(
+                station__in=stations, 
+                measurement=measurement, 
+                time__gte=datetime.strptime(start_date, '%Y-%m-%d').date(), 
+                time__lte=datetime.strptime(end_date, '%Y-%m-%d').date()
+            )
+            total_value = location_data.aggregate(Sum('value'))['value__sum']
+            if total_value is not None:
+                data_summary.append({
+                    'location': f'{location.city.name}, {location.state.name}, {location.country.name}',
+                    'measurement': measurement.name,
+                    'total': total_value,
+                })
+
+    return JsonResponse(data_summary, safe=False)
