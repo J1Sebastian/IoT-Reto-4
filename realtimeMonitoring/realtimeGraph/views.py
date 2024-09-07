@@ -675,29 +675,47 @@ def add_str(str1, str2):
     return str1 + str2
 
 
-def get_data_summary(request):
-    start_date = request.GET.get('start', '1970-01-01')
-    end_date = request.GET.get('end', '2100-01-01')
+def get_highest_measurement_location_pg(request):
+    start_date_str = request.GET.get('start', '1970-01-01')
+    end_date_str = request.GET.get('end', '2100-01-01')
+
+    try:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d")
+    except:
+        start = datetime.now() - dateutil.relativedelta.relativedelta(weeks=1)
+    try:
+        end = datetime.strptime(end_date_str, "%Y-%m-%d")
+    except:
+        end = datetime.now()
+
     data_summary = []
+    measurements = Measurement.objects.all()
 
-    locations = Location.objects.all()
-    measurements = Measurement.objects.filter(active=True)
+    for measurement in measurements:
+        locations = Location.objects.all()
+        max_value = None
+        max_location = None
 
-    for location in locations:
-        stations = Station.objects.filter(location=location)
-        for measurement in measurements:
+        for location in locations:
+            stations = Station.objects.filter(location=location)
             location_data = Data.objects.filter(
                 station__in=stations, 
                 measurement=measurement, 
-                time__gte=datetime.strptime(start_date, '%Y-%m-%d').date(), 
-                time__lte=datetime.strptime(end_date, '%Y-%m-%d').date()
+                time__gte=start, 
+                time__lte=end
             )
-            total_value = location_data.aggregate(Sum('value'))['value__sum']
-            if total_value is not None:
-                data_summary.append({
-                    'location': f'{location.city.name}, {location.state.name}, {location.country.name}',
-                    'measurement': measurement.name,
-                    'total': total_value,
-                })
+            
+            if location_data.exists():
+                current_max_value = location_data.aggregate(Max('value'))['value__max']
+                if max_value is None or current_max_value > max_value:
+                    max_value = current_max_value
+                    max_location = location
 
-    return JsonResponse(data_summary, safe=False)
+        if max_value is not None:
+            data_summary.append({
+                'measurement': measurement.name,
+                'location': f'{max_location.city.name}, {max_location.state.name}, {max_location.country.name}',
+                'highest_value': max_value,
+            })
+
+    return JsonResponse(data_summary)
