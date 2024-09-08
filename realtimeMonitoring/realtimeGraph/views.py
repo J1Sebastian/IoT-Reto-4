@@ -718,4 +718,4 @@ def get_highest_measurement_location_pg(request):
                 'highest_value': max_value,
             })
 
-    return JsonResponse(data_summary)
+    return JsonResponse(data_summary, safe=False)
